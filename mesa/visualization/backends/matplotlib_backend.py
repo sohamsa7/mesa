@@ -326,8 +326,10 @@ class MatplotlibBackend(AbstractRenderer):
             property_layer_portrayal (Callable): Function that returns PropertyLayerStyle.
 
         Returns:
-            tuple: (matplotlib.axes.Axes, colorbar) - The matplotlib axes and colorbar objects.
+            tuple: (matplotlib.axes.Axes, colorbar), where colorbar is None if no
+            property layer is drawn or no colorbar is created.
         """
+        cbar = None
         # Draw each layer
         for layer_name, layer in property_layers.items():
             if layer_name == "empty":
@@ -395,7 +397,8 @@ class MatplotlibBackend(AbstractRenderer):
             elif isinstance(space, HexGrid):
                 hexagons = self.space_drawer.hexagons
                 norm = Normalize(vmin=vmin, vmax=vmax)
-                colors = data.T.ravel()
+                # hexagons follow space.all_cells, which is x-major like data
+                colors = data.ravel()
 
                 if color:
                     normalized_colors = np.clip(norm(colors), 0, 1)
@@ -413,7 +416,6 @@ class MatplotlibBackend(AbstractRenderer):
                 )
 
             # Add colorbar if requested
-            cbar = None
             if portrayal.colorbar:
                 norm = Normalize(vmin=vmin, vmax=vmax)
                 sm = ScalarMappable(norm=norm, cmap=cmap)

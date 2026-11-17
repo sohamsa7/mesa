@@ -13,6 +13,13 @@ This namespace contains experimental features. These are under development, and 
    :members:
 ```
 
+## Locations
+
+```{eval-rst}
+.. automodule:: experimental.locations
+   :members:
+```
+
 ## Scenarios
 
 ```{eval-rst}
@@ -22,6 +29,11 @@ This namespace contains experimental features. These are under development, and 
 
 ```{eval-rst}
 .. automodule:: experimental.scenarios.runner
+   :members:
+```
+
+```{eval-rst}
+.. automodule:: experimental.scenarios.disk_store
    :members:
 ```
 

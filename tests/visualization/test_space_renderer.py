@@ -3,6 +3,7 @@
 import random
 from unittest.mock import MagicMock, patch
 
+import altair as alt
 import numpy as np
 import pytest
 
@@ -218,3 +219,84 @@ def test_property_layer_style_instance():
     portrayal_arg = call_args[0][2]
     assert callable(portrayal_arg)
     assert portrayal_arg("any_layer") == style
+
+
+def test_empty_property_layer_portrayal_returns_none_colorbar():
+    """An empty legacy portrayal skips all layers and returns no colorbar."""
+    sr = SpaceRenderer(CustomModel(), backend="matplotlib")
+
+    with pytest.warns(FutureWarning):
+        result = sr.setup_property_layer({}).draw_property_layer()
+
+    assert result[0] is sr.backend_renderer.ax
+    assert result[1] is None
+
+
+def test_none_property_layer_portrayal_returns_none_colorbar():
+    """A callable that skips all layers returns no colorbar."""
+    sr = SpaceRenderer(CustomModel(), backend="matplotlib")
+
+    result = sr.setup_property_layer(lambda _: None).draw_property_layer()
+
+    assert result[0] is sr.backend_renderer.ax
+    assert result[1] is None
+
+
+def test_mismatched_property_layer_dimensions_returns_none_colorbar():
+    """A property layer with mismatched dimensions is skipped with a warning."""
+    model = CustomModel()
+    model.grid.property_layers["test"] = np.zeros((1, 1))
+    sr = SpaceRenderer(model, backend="matplotlib")
+
+    with pytest.warns(UserWarning, match="Layer test dimensions"):
+        result = sr.setup_property_layer(
+            lambda _: PropertyLayerStyle(color="red")
+        ).draw_property_layer()
+
+    assert result == (sr.backend_renderer.ax, None)
+
+
+@pytest.mark.parametrize("with_agents", [False, True])
+def test_altair_canvas_with_property_layer(with_agents):
+    """The Altair canvas should work when a property layer is drawn.
+
+    The Altair backend returns the property layers as one chart, so canvas
+    must not try to unpack it into a chart and a colorbar.
+    """
+    model = CustomModel()
+    sr = SpaceRenderer(model, backend="altair")
+    sr.setup_property_layer(lambda _: PropertyLayerStyle(colormap="viridis"))
+    if with_agents:
+        CellAgent(model).cell = model.grid[(1, 1)]
+        sr.setup_agents(lambda _: AgentPortrayalStyle())
+    sr.render()
+
+    chart = sr.canvas
+
+    assert isinstance(chart, alt.LayerChart)
+    chart.to_dict()  # raises if the combined chart is not a valid spec
+
+    # the grid structure, the property layer chart, then the agents on top
+    assert len(chart.layer) == (3 if with_agents else 2)
+    assert isinstance(chart.layer[1], alt.LayerChart)
+    if with_agents:
+        assert chart.layer[2].to_dict()["mark"]["type"] == "point"
+
+
+def test_hexgrid_property_layer_alignment():
+    """Test that property layer values on HexGrid align with their cell coordinates."""
+    model = mesa.Model(rng=42)
+    grid = HexGrid((4, 2), random=model.random)
+    grid.create_property_layer("sugar", default_value=0.0)
+    grid.property_layers["sugar"][3, 0] = 10.0
+
+    model.grid = grid
+    sr = SpaceRenderer(model, backend="matplotlib")
+    sr.setup_property_layer(lambda _: PropertyLayerStyle(colormap="viridis"))
+    sr.render()
+
+    poly = sr.backend_renderer.ax.collections[1]
+    facecolors = np.array(poly.get_facecolors())
+    max_idx = np.argmax(facecolors[:, 0])
+    cells = list(grid.all_cells)
+    assert cells[max_idx].coordinate == (3, 0)
